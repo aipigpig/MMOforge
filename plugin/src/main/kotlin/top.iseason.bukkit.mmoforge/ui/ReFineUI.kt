@@ -17,6 +17,8 @@ import top.iseason.bukkit.mmoforge.config.RefineUIConfig
 import top.iseason.bukkit.mmoforge.hook.PAPIHook
 import top.iseason.bukkit.mmoforge.hook.VaultHook.takeMoney
 import top.iseason.bukkit.mmoforge.stats.MMOForgeData
+import top.iseason.bukkit.mmoforge.stats.MMOForgeRuleResolver
+import top.iseason.bukkit.mmoforge.stats.MMOForgeRuleSet
 import top.iseason.bukkit.mmoforge.stats.MMOForgeStat
 import top.iseason.bukkit.mmoforge.stats.RefineChance
 import top.iseason.bukkit.mmoforge.uitls.getForgeData
@@ -40,6 +42,7 @@ class ReFineUI(val player: Player) : ChestUI(
     RefineUIConfig.clickDelay
 ) {
     private var toolMMOForgeData: MMOForgeData? = null
+    private var toolRuleSet: MMOForgeRuleSet? = null
     private var materialMMOForgeData: MMOForgeData? = null
     private var toolType: String? = null
     private var gold = 0.0
@@ -68,6 +71,7 @@ class ReFineUI(val player: Player) : ChestUI(
             ).inputFilter {
                 val nbtItem = NBTItem.get(it) ?: return@inputFilter false
                 toolMMOForgeData = nbtItem.getForgeData() ?: return@inputFilter false
+                toolRuleSet = MMOForgeRuleResolver.resolve(nbtItem) ?: return@inputFilter false
                 toolType = nbtItem.getString("MMOITEMS_ITEM_ID")
                 true
             }.onOutput(true) {
@@ -156,6 +160,7 @@ class ReFineUI(val player: Player) : ChestUI(
 
     private fun resetData() {
         toolMMOForgeData = null
+        toolRuleSet = null
         materialMMOForgeData = null
         toolType = null
         gold = 0.0
@@ -193,10 +198,11 @@ class ReFineUI(val player: Player) : ChestUI(
         }
         val mmoItem = LiveMMOItem(toolNBT)
         val forgeData = mmoItem.getData(MMOForgeStat) as? MMOForgeData ?: return
+        val ruleSet = toolRuleSet ?: return
         var add = materialMMOForgeData!!.refine + 1
-        add = if (forgeData.refine + add > forgeData.maxRefine) forgeData.maxRefine - forgeData.refine else add
+        add = if (forgeData.refine + add > ruleSet.maxRefine) ruleSet.maxRefine - forgeData.refine else add
         if (add == 0) return
-        mmoItem.refine(forgeData, add)
+        mmoItem.refine(forgeData, ruleSet, add)
         refine = forgeData.refine
         forgeData.refine += add
         newRefine = forgeData.refine

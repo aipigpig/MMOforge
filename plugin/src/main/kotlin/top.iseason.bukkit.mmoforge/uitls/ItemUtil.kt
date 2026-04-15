@@ -27,6 +27,7 @@ import org.bukkit.inventory.meta.ItemMeta
 import top.iseason.bukkit.mmoforge.config.MainConfig
 import top.iseason.bukkit.mmoforge.config.MainConfig.getUpgradeInfoByString
 import top.iseason.bukkit.mmoforge.stats.MMOForgeData
+import top.iseason.bukkit.mmoforge.stats.MMOForgeRuleSet
 import top.iseason.bukkit.mmoforge.stats.MMOForgeStat
 import top.iseason.bukkittemplate.utils.bukkit.MessageUtils.toColor
 import top.iseason.bukkittemplate.utils.other.RandomUtils
@@ -159,14 +160,14 @@ fun LiveMMOItem.addAttribute(
  * @param data 数据，主要提供精炼的内容和星级
  * @param times 精炼的次数
  */
-fun LiveMMOItem.refine(data: MMOForgeData, times: Int) {
+fun LiveMMOItem.refine(data: MMOForgeData, ruleSet: MMOForgeRuleSet, times: Int) {
     val refine = data.refine
     for (i in refine + 1..refine + times) {
         addAttribute(
             MainConfig.RefineUUID,
-            (data.refineGain ?: MainConfig.refineGain).getLevelMap(i),
+            ruleSet.refineGain.getLevelMap(i),
             1,
-            data.refineGain != null
+            true
         )
     }
 }
@@ -176,14 +177,14 @@ fun LiveMMOItem.refine(data: MMOForgeData, times: Int) {
  * @param data 数据，主要提供突破的内容和星级
  * @param times 突破的次数
  */
-fun LiveMMOItem.breakthrough(data: MMOForgeData, times: Int) {
+fun LiveMMOItem.breakthrough(data: MMOForgeData, ruleSet: MMOForgeRuleSet, times: Int) {
     val limit = data.limit
     for (i in limit + 1..limit + times) {
         addAttribute(
             MainConfig.LimitUUID,
-            (data.limitGain ?: MainConfig.limitGain).getLevelMap(i),
+            ruleSet.limitGain.getLevelMap(i),
             1,
-            data.limitGain != null
+            true
         )
     }
 }
@@ -194,14 +195,14 @@ fun LiveMMOItem.breakthrough(data: MMOForgeData, times: Int) {
  * @param data 数据，主要提供突破的内容和星级
  * @param times 强化的次数
  */
-fun LiveMMOItem.forge(data: MMOForgeData, times: Int) {
+fun LiveMMOItem.forge(data: MMOForgeData, ruleSet: MMOForgeRuleSet, times: Int) {
     val forge = data.forge
     for (i in forge + 1..forge + times) {
         addAttribute(
             MainConfig.ForgeUUID,
-            (data.forgeGain ?: MainConfig.forgeGain).getLevelMap(i),
+            ruleSet.forgeGain.getLevelMap(i),
             1,
-            data.forgeGain != null
+            true
         )
     }
 }

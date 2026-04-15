@@ -286,14 +286,14 @@ object MainConfig : SimpleYAMLConfig() {
     /**
      * 由强化数据得lore
      */
-    fun getItemLore(forgeData: MMOForgeData): List<String> {
+    fun getItemLore(forgeData: MMOForgeData, maxForge: Int = MainConfig.MAX_LIMIT * MainConfig.LimitRate): List<String> {
         val format = DecimalFormat("0.##")
         val current = format.format(forgeData.currentExp)
         val forgeUpdateExp = forgeData.getForgeUpdateExp()
         val forgeNeed = format.format(forgeUpdateExp)
         var processBar = ""
         val toMutableList = ArrayList(itemLore)
-        if (itemLoreRemoved >= 0 && forgeData.forge == forgeData.maxForge) {
+        if (itemLoreRemoved >= 0 && forgeData.forge == maxForge) {
             toMutableList.removeAt(itemLoreRemoved)
         } else {
             processBar = getProcessBar(10, forgeData.currentExp, forgeUpdateExp)

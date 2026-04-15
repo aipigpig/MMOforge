@@ -1,0 +1,22 @@
+name: MMOForge
+main: top.iseason.bukkit.mmoforge.libs.core.BukkitTemplate
+version: 1.0.22
+authors: [ Iseason ]
+api-version: 1.13
+depend:
+  - NBTAPI
+  - MMOItems
+  - Vault
+softdepend:
+  - MMOEconomy
+runtime-libraries:
+  libraries-folder: 'libraries'
+  repositories:
+    - https://maven.aliyun.com/repository/public/
+    - https://repo.maven.apache.org/maven2/
+
+  libraries:
+    - org.jetbrains.kotlin:kotlin-stdlib:2.2.10
+  exclude:
+    - org.jetbrains.kotlin:kotlin-stdlib-common
+

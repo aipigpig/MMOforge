@@ -7,7 +7,6 @@
 
 package top.iseason.bukkit.mmoforge.stats
 
-import io.lumine.mythic.lib.gson.JsonArray
 import io.lumine.mythic.lib.gson.JsonObject
 import io.lumine.mythic.lib.gson.JsonParser
 import net.Indyuce.mmoitems.MMOItems
@@ -60,7 +59,7 @@ data class MMOForgeData(
     /**
      * 获取当前最大强化等级
      */
-    fun getCurrentMaxForge() = min((limit + 1) * MainConfig.LimitRate, maxForge)
+    fun getCurrentMaxForge(maxForge: Int = this.maxForge) = min((limit + 1) * MainConfig.LimitRate, maxForge)
 
     override fun mergeWith(data: MMOForgeData?) {
         require(data != null) { "Cannot merge two different stat data types!" }
@@ -75,33 +74,6 @@ data class MMOForgeData(
         addProperty("limit", limit)
         addProperty("forge", forge)
         addProperty("totalExp", currentExp)
-        if (maxRefine != MainConfig.MAX_REFINE)
-            addProperty("max-refine", maxRefine)
-        if (maxLimit != MainConfig.MAX_LIMIT)
-            addProperty("max-limit", maxLimit)
-        if (maxForge != MainConfig.MAX_LIMIT * MainConfig.LimitRate)
-            addProperty("max-forge", maxForge)
-        if (!refineGain.isNullOrEmpty())
-            add("gain-refine", refineGain!!.toJson())
-        if (!limitGain.isNullOrEmpty())
-            add("gain-limit", limitGain!!.toJson())
-        if (!forgeGain.isNullOrEmpty()) {
-            add("gain-forge", forgeGain!!.toJson())
-        }
-        if (forgeType != null) {
-            val jsonArray = JsonArray()
-            forgeType!!.forEach { jsonArray.add(it) }
-            add("forge-type", jsonArray)
-        }
-        if (!limitType.isNullOrEmpty()) {
-            val jsonObject = JsonObject()
-            limitType!!.forEach { (level, list) ->
-                val temp = JsonArray()
-                list.forEach { temp.add(it) }
-                jsonObject.add(level.toString(), temp)
-            }
-            add("limit-type", jsonObject)
-        }
     }
 
 
@@ -129,11 +101,11 @@ data class MMOForgeData(
      * 获取给与的经验可以升的强化等级、当前经验与剩余经验
      * @return 增加的等级${first} 、剩余的经验${second} 溢出的经验${third}
      */
-    fun getLevelByExtraExp(exp: Double): Triple<Int, Double, Double> {
+    fun getLevelByExtraExp(exp: Double, maxForge: Int = this.maxForge): Triple<Int, Double, Double> {
         var level = 0
         var remainExp = exp
         var current = currentExp
-        val max = min(forge + MainConfig.PerMaxForge, getCurrentMaxForge())
+        val max = min(forge + MainConfig.PerMaxForge, getCurrentMaxForge(maxForge))
         while (true) {
             val fl = forge + level
             if (fl >= max) break
@@ -183,45 +155,6 @@ data class MMOForgeData(
                 limit = json.get("limit").asInt
                 forge = json.get("forge").asInt
                 currentExp = json.get("totalExp").asDouble
-            }
-            if (json.has("max-refine")) {
-                attributeData.maxRefine = json.get("max-refine").asInt
-            }
-            if (json.has("max-limit")) {
-                attributeData.maxLimit = json.get("max-limit").asInt
-            }
-            if (json.has("max-forge")) {
-                attributeData.maxForge = json.get("max-forge").asInt
-            }
-            if (json.has("gain-refine")) {
-                attributeData.refineGain = json.getAsJsonObject("gain-refine").toForgeMap() ?: MainConfig.refineGain
-            }
-            if (json.has("gain-limit")) {
-                attributeData.limitGain = json.getAsJsonObject("gain-limit").toForgeMap() ?: MainConfig.limitGain
-            }
-            if (json.has("gain-forge")) {
-                attributeData.forgeGain = json.getAsJsonObject("gain-forge").toForgeMap() ?: MainConfig.forgeGain
-            }
-            if (json.has("forge-type")) {
-                val list = arrayListOf<String>()
-                json.getAsJsonArray("forge-type").forEach { list.add(it.asString) }
-                attributeData.forgeType = list
-            }
-            if (json.has("limit-type")) {
-                val jsonObject = json.get("limit-type").asJsonObject
-                val keySet = jsonObject.keySet()
-                if (keySet.isNotEmpty()) {
-                    val linkedHashMap = LinkedHashMap<Int, List<String>>()
-                    jsonObject.keySet().forEach {
-                        val arrayListOf = arrayListOf<String>()
-                        val jsonArray = jsonObject.getAsJsonArray(it)
-                        jsonArray.forEach { s ->
-                            arrayListOf.add(s.asString)
-                        }
-                        linkedHashMap[it.toInt()] = arrayListOf
-                    }
-                    attributeData.limitType = linkedHashMap
-                }
             }
             return attributeData
         }

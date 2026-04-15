@@ -42,33 +42,17 @@ object MMOForgeStat : ItemStat<MMOForgeData, MMOForgeData>(
         if (config.contains("forge")) {
             attributeData.forge = config.getInt("forge")
         }
-        if (config.contains("max-refine")) {
-            attributeData.maxRefine = config.getInt("max-refine")
-        }
-        if (config.contains("max-limit")) {
-            attributeData.maxLimit = config.getInt("max-limit")
-        }
-        if (config.contains("max-forge")) {
-            attributeData.maxForge = config.getInt("max-forge")
-        }
-        if (config.contains("gain-refine")) {
-            attributeData.refineGain = MainConfig.getStatGain(config.getConfigurationSection("gain-refine")!!)
-        }
-        if (config.contains("gain-limit")) {
-            attributeData.limitGain = MainConfig.getStatGain(config.getConfigurationSection("gain-limit")!!)
-        }
-        if (config.contains("gain-forge")) {
-            attributeData.forgeGain = MainConfig.getStatGain(config.getConfigurationSection("gain-forge")!!)
-        }
-        if (config.contains("forge-type")) {
-            attributeData.forgeType = config.getStringList("forge-type")
-        }
+        if (config.contains("max-refine")) attributeData.maxRefine = config.getInt("max-refine")
+        if (config.contains("max-limit")) attributeData.maxLimit = config.getInt("max-limit")
+        if (config.contains("max-forge")) attributeData.maxForge = config.getInt("max-forge")
+        if (config.contains("gain-refine")) attributeData.refineGain = MainConfig.getStatGain(config.getConfigurationSection("gain-refine")!!)
+        if (config.contains("gain-limit")) attributeData.limitGain = MainConfig.getStatGain(config.getConfigurationSection("gain-limit")!!)
+        if (config.contains("gain-forge")) attributeData.forgeGain = MainConfig.getStatGain(config.getConfigurationSection("gain-forge")!!)
+        if (config.contains("forge-type")) attributeData.forgeType = config.getStringList("forge-type")
         if (config.contains("limit-type")) {
             val section = config.getConfigurationSection("limit-type")!!
             val linkedHashMap = LinkedHashMap<Int, List<String>>()
-            section.getKeys(false).forEach {
-                linkedHashMap[it.toInt()] = section.getStringList(it)
-            }
+            section.getKeys(false).forEach { linkedHashMap[it.toInt()] = section.getStringList(it) }
             attributeData.limitType = linkedHashMap
         }
         return attributeData
@@ -80,7 +64,9 @@ object MMOForgeStat : ItemStat<MMOForgeData, MMOForgeData>(
 
     override fun whenApplied(item: ItemStackBuilder, statData: MMOForgeData) {
         try {
-            item.lore.insert(this.path, MainConfig.getItemLore(statData))
+            val ruleSet = MMOForgeRuleResolver.resolve(item.mmoItem)
+            val maxForge = ruleSet?.getCurrentMaxForge(statData.limit) ?: statData.getCurrentMaxForge()
+            item.lore.insert(this.path, MainConfig.getItemLore(statData, maxForge))
         } catch (e: Exception) {
             e.printStackTrace()
         }

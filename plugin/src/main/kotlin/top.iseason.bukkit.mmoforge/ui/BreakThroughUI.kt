@@ -23,6 +23,8 @@ import top.iseason.bukkit.mmoforge.hook.PAPIHook
 import top.iseason.bukkit.mmoforge.hook.VaultHook.takeMoney
 import top.iseason.bukkit.mmoforge.stats.BreakChance
 import top.iseason.bukkit.mmoforge.stats.MMOForgeData
+import top.iseason.bukkit.mmoforge.stats.MMOForgeRuleResolver
+import top.iseason.bukkit.mmoforge.stats.MMOForgeRuleSet
 import top.iseason.bukkit.mmoforge.stats.MMOForgeStat
 import top.iseason.bukkit.mmoforge.uitls.breakthrough
 import top.iseason.bukkit.mmoforge.uitls.getForgeData
@@ -47,6 +49,7 @@ class BreakThroughUI(val player: Player) : ChestUI(
     BreakUIConfig.clickDelay
 ) {
     private var inputData: MMOForgeData? = null
+    private var inputRuleSet: MMOForgeRuleSet? = null
 
     //    var limitSlot = mutableListOf<IOSlot>()
     private var canBreak = false
@@ -79,13 +82,16 @@ class BreakThroughUI(val player: Player) : ChestUI(
                 .inputFilter {
                     val nbtItem = NBTItem.get(it) ?: return@inputFilter false
                     val inputData = nbtItem.getForgeData() ?: return@inputFilter false
-                    if (inputData.forge != inputData.getCurrentMaxForge()) return@inputFilter false
+                    val inputRuleSet = MMOForgeRuleResolver.resolve(nbtItem) ?: return@inputFilter false
+                    if (inputData.forge != inputRuleSet.getCurrentMaxForge(inputData.limit)) return@inputFilter false
                     this@BreakThroughUI.inputData = inputData
+                    this@BreakThroughUI.inputRuleSet = inputRuleSet
                     true
                 }.onInput(async = true) {
                     updateInput(inputData)
                 }.onOutput(async = true) {
                     inputData = null
+                    inputRuleSet = null
                     updateInput(null)
                 }.setup()
         }
@@ -252,7 +258,7 @@ class BreakThroughUI(val player: Player) : ChestUI(
             resetResult()
             return
         }
-        val limitType = (inputData.limitType ?: MainConfig.limitType)[inputData.limit + 1]
+        val limitType = inputRuleSet?.limitType?.get(inputData.limit + 1)
         //刷新材料槽
         for ((i, s) in materialSlots.withIndex()) {
             s.requireItem = limitType?.getOrNull(i)
@@ -265,7 +271,8 @@ class BreakThroughUI(val player: Player) : ChestUI(
             resetResult()
             return
         }
-        if (inputData!!.limit >= inputData!!.maxLimit) {
+        val ruleSet = inputRuleSet ?: return resetResult()
+        if (inputData!!.limit >= ruleSet.maxLimit) {
             resetResult()
             return
         }
@@ -294,7 +301,7 @@ class BreakThroughUI(val player: Player) : ChestUI(
         )
         // 预览物品
         val liveMMOItem = LiveMMOItem(itemStack)
-        liveMMOItem.breakthrough(inputData, 1)
+        liveMMOItem.breakthrough(inputData, ruleSet, 1)
         breakLevel = inputData.limit
         inputData.limit += 1
         newBreakLevel = inputData.limit

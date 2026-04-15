@@ -18,6 +18,8 @@ import top.iseason.bukkit.mmoforge.hook.PAPIHook
 import top.iseason.bukkit.mmoforge.hook.VaultHook.takeMoney
 import top.iseason.bukkit.mmoforge.stats.ForgeChance
 import top.iseason.bukkit.mmoforge.stats.MMOForgeData
+import top.iseason.bukkit.mmoforge.stats.MMOForgeRuleResolver
+import top.iseason.bukkit.mmoforge.stats.MMOForgeRuleSet
 import top.iseason.bukkit.mmoforge.stats.MMOForgeStat
 import top.iseason.bukkit.mmoforge.stats.material.ForgeExp
 import top.iseason.bukkit.mmoforge.uitls.forge
@@ -43,6 +45,7 @@ class ForgeUI(val player: Player) : ChestUI(
     ForgeUIConfig.clickDelay
 ) {
     private var inputData: MMOForgeData? = null
+    private var inputRuleSet: MMOForgeRuleSet? = null
     private var canForge = false
     private var forgeLevel = 0
     private var newForgeLevel = 0
@@ -69,12 +72,14 @@ class ForgeUI(val player: Player) : ChestUI(
                 .inputFilter {
                     val nbtItem = NBTItem.get(it) ?: return@inputFilter false
                     inputData = nbtItem.getForgeData() ?: return@inputFilter false
+                    inputRuleSet = MMOForgeRuleResolver.resolve(nbtItem) ?: return@inputFilter false
                     true
                 }.onInput(true) {
                     updateMaterialSlots()
                     updateResult()
                 }.onOutput(true) {
                     inputData = null
+                    inputRuleSet = null
                     updateMaterialSlots()
                     updateResult()
                 }.setup()
@@ -197,12 +202,9 @@ class ForgeUI(val player: Player) : ChestUI(
     }
 
     private fun getAllowedForgeTypes(): Set<String>? {
-        val itemForgeType = inputData?.forgeType
-        if (itemForgeType != null) {
-            return itemForgeType.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
-        }
-        if (MainConfig.forgeType.isEmpty()) return null
-        return MainConfig.forgeType.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+        val allowedTypes = inputRuleSet?.forgeType ?: return null
+        if (allowedTypes.isEmpty()) return null
+        return allowedTypes.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
     }
 
     private fun isValidForgeMaterial(item: org.bukkit.inventory.ItemStack, currentSlot: IOSlot? = null): Boolean {
@@ -241,12 +243,13 @@ class ForgeUI(val player: Player) : ChestUI(
 
         val inputItem = inputSlot.itemStack
         //不满足强化条件
-        if (inputItem == null || totalExp == 0.0 || inputData == null) {
+        if (inputItem == null || totalExp == 0.0 || inputData == null || inputRuleSet == null) {
             resetResult()
             return
         }
         val forgeData = inputData!!.clone()
-        val (level, remain, overflow) = forgeData.getLevelByExtraExp(totalExp)
+        val ruleSet = inputRuleSet!!
+        val (level, remain, overflow) = forgeData.getLevelByExtraExp(totalExp, ruleSet.maxForge)
         //不能升级
         if (overflow == totalExp) {
             resetResult()
@@ -284,7 +287,7 @@ class ForgeUI(val player: Player) : ChestUI(
         } else {
             100.0
         } + materialChance
-        liveMMOItem.forge(forgeData, level)
+        liveMMOItem.forge(forgeData, ruleSet, level)
         forgeLevel = forgeData.forge
         forgeData.apply {
             forge += level
