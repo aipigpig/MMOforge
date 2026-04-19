@@ -86,7 +86,6 @@ object MMOListener : Listener {
     fun onReforge(event: MMOItemReforgeEvent) {
         val data = event.oldMMOItem.getData(MMOForgeStat) ?: return
         event.newMMOItem.setData(MMOForgeStat, data)
-
     }
 
 //    /**

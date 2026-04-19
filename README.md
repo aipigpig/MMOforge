@@ -115,8 +115,12 @@ LONG_SWORD:
         '4':
         - material:STEEL_INGOT
         '5':
-        - material:STEEL_INGOT
+        - material:STEEL_INGOT:5
         - material:UNCOMMON_WEAPON_ESSENCE
+
+      # `material:STEEL_INGOT` 表示需要 1 个材料
+      # `material:STEEL_INGOT:5` 表示需要 5 个材料
+      # 如果你自定义了突破界面的 `allow-materials` 显示内容，可以使用 `{2}` 占位符显示需求数量
       gain-forge: # 强化增益，具体看下面
         '1':
           ATTACK_DAMAGE: 1%
@@ -404,4 +408,3 @@ sqrt()
 exp()
 
 ~~~
-

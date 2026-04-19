@@ -1,6 +1,6 @@
 name: MMOForge
 main: top.iseason.bukkit.mmoforge.libs.core.BukkitTemplate
-version: 1.0.22
+version: 1.0.23
 authors: [ Iseason ]
 api-version: 1.13
 depend:

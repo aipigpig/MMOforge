@@ -51,8 +51,13 @@ object MMOForgeStat : ItemStat<MMOForgeData, MMOForgeData>(
         if (config.contains("forge-type")) attributeData.forgeType = config.getStringList("forge-type")
         if (config.contains("limit-type")) {
             val section = config.getConfigurationSection("limit-type")!!
-            val linkedHashMap = LinkedHashMap<Int, List<String>>()
-            section.getKeys(false).forEach { linkedHashMap[it.toInt()] = section.getStringList(it) }
+            val linkedHashMap = LinkedHashMap<Int, List<ForgeMaterialRequirement>>()
+            section.getKeys(false).forEach {
+                linkedHashMap[it.toInt()] = parseForgeMaterialRequirements(
+                    section.getStringList(it),
+                    "MMOItem:${config.currentPath}.limit-type.$it"
+                )
+            }
             attributeData.limitType = linkedHashMap
         }
         return attributeData
