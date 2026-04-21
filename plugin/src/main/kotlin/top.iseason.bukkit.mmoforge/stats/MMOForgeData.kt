@@ -53,7 +53,7 @@ data class MMOForgeData(
     var forgeGain: ForgeParserMap? = null,
     var forgeType: List<String>? = null,
     // 突破需要的材料，分突破等级
-    var limitType: LinkedHashMap<Int, List<String>>? = null
+    var limitType: ForgeMaterialMap? = null
 ) : StatData, Mergeable<MMOForgeData>, RandomStatData<MMOForgeData> {
 
     /**
@@ -139,7 +139,7 @@ data class MMOForgeData(
         limitGain = if (limitGain == null) null else LinkedHashMap(limitGain),
         forgeGain = if (forgeGain == null) null else LinkedHashMap(forgeGain),
         forgeType = forgeType?.toList(),
-        limitType = if (limitType == null) null else LinkedHashMap(limitType),
+        limitType = if (limitType == null) null else LinkedHashMap(limitType!!.mapValues { (_, value) -> value.toList() }),
     )
 
     override fun randomize(p0: MMOItemBuilder?) = this

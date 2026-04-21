@@ -1,10 +1,3 @@
-/*
- * Description:
- * @Author: Iseason2000
- * @Date: 2022/10/1 下午7:44
- *
- */
-
 package top.iseason.bukkit.mmoforge.config
 
 import org.bukkit.Material
@@ -34,7 +27,6 @@ object BreakUIConfig : SimpleYAMLConfig() {
 
     @Key
     @Comment("点击延迟")
-
     var clickDelay = 200L
 
     var slots: MutableMap<String, MutableMap<ItemStack, IntArray>> = mutableMapOf()
@@ -63,18 +55,31 @@ object BreakUIConfig : SimpleYAMLConfig() {
     var materialsSection: MemorySection = YamlConfiguration().apply {
         createSection("default", buildMap {
             put("slots", "30,31,32")
-            put("item", Material.RED_STAINED_GLASS_PANE.item.applyMeta { setDisplayName("&c请先放入需要突破的物品") }
-                .toSection())
+            put("item", Material.RED_STAINED_GLASS_PANE.item.applyMeta {
+                setDisplayName("&c请先放入需要突破的物品")
+            }.toSection())
         })
     }
 
     @Key("allow-materials")
-    @Comment("", "接受材料时的材料输入槽，{0} 为需要的物品的类型名称；{1} 为需要的物品的名字")
+    @Comment("", "可放入突破材料时的输入槽占位")
     var allowMaterialsSection: MemorySection = YamlConfiguration().apply {
         createSection("default", buildMap {
             put("slots", "30,31,32")
-            put("item", Material.RED_STAINED_GLASS_PANE.item.applyMeta { setDisplayName("&6请放入:&f{0} &f{1}") }
-                .toSection())
+            put("item", Material.YELLOW_STAINED_GLASS_PANE.item.applyMeta {
+                setDisplayName("&6请放入突破材料")
+            }.toSection())
+        })
+    }
+
+    @Key("required-materials")
+    @Comment("", "突破需求材料展示槽")
+    var requiredMaterialsSection: MemorySection = YamlConfiguration().apply {
+        createSection("default", buildMap {
+            put("slots", "21,22,23")
+            put("item", Material.ORANGE_STAINED_GLASS_PANE.item.applyMeta {
+                setDisplayName("&6突破需求材料")
+            }.toSection())
         })
     }
 
@@ -115,16 +120,13 @@ object BreakUIConfig : SimpleYAMLConfig() {
         readSlots("background", backgroundSection, slots)
         readSlots("default-materials", materialsSection, slots)
         readSlots("allow-materials", allowMaterialsSection, slots)
+        readSlots("required-materials", requiredMaterialsSection, slots)
         readSlots("default-break", breakThroughSection, slots)
         readSlots("allow-break", allowBreakThroughSection, slots)
         readSlot("input", inputSection, slots)
         readSlot("output", outputSection, slots)
-
     }
 
-    /**
-     * 读取多个槽
-     */
     fun readSlots(
         type: String,
         section: ConfigurationSection,
@@ -135,9 +137,6 @@ object BreakUIConfig : SimpleYAMLConfig() {
         }
     }
 
-    /**
-     * 读取单个槽
-     */
     fun readSlot(
         type: String,
         section: ConfigurationSection,
@@ -150,5 +149,4 @@ object BreakUIConfig : SimpleYAMLConfig() {
         val typeSlots = slotMap.computeIfAbsent(type) { mutableMapOf() }
         typeSlots[item] = slots
     }
-
 }

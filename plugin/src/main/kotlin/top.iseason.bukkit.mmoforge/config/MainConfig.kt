@@ -23,8 +23,11 @@ import net.Indyuce.mmoitems.stat.type.Upgradable
 import org.bukkit.configuration.ConfigurationSection
 import org.bukkit.configuration.MemorySection
 import org.bukkit.configuration.file.YamlConfiguration
+import top.iseason.bukkit.mmoforge.stats.ForgeMaterialMap
+import top.iseason.bukkit.mmoforge.stats.ForgeMaterialRequirement
 import top.iseason.bukkit.mmoforge.stats.ForgeParserMap
 import top.iseason.bukkit.mmoforge.stats.MMOForgeData
+import top.iseason.bukkit.mmoforge.stats.parseForgeMaterialRequirements
 import top.iseason.bukkit.mmoforge.uitls.formatForgeString
 import top.iseason.bukkit.mmoforge.uitls.getProcessBar
 import top.iseason.bukkit.mmoforge.uitls.getStarCount
@@ -202,7 +205,7 @@ object MainConfig : SimpleYAMLConfig() {
         set("5", arrayListOf("material:STEEL_INGOT", "material:UNCOMMON_WEAPON_ESSENCE"))
     }
 
-    var limitType: LinkedHashMap<Int, List<String>> = LinkedHashMap()
+    var limitType: ForgeMaterialMap = LinkedHashMap()
     var limitGain: ForgeParserMap = LinkedHashMap()
         private set
 
@@ -316,9 +319,12 @@ object MainConfig : SimpleYAMLConfig() {
         refineGain = getStatGain(refineSection)
         limitGain = getStatGain(ForgeLimitSection)
         restForgeLevelMap()
-        val linkedHashMap = LinkedHashMap<Int, List<String>>()
+        val linkedHashMap = LinkedHashMap<Int, List<ForgeMaterialRequirement>>()
         LimitTypeSection.getKeys(false).forEach {
-            linkedHashMap[it.toInt()] = LimitTypeSection.getStringList(it)
+            linkedHashMap[it.toInt()] = parseForgeMaterialRequirements(
+                LimitTypeSection.getStringList(it),
+                "config.yml.limit-type-map.$it"
+            )
         }
         limitType = linkedHashMap
         forgeType = ForgeTypeSection.map { it.trim() }.filter { it.isNotEmpty() }

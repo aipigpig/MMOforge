@@ -1,10 +1,3 @@
-/*
- * Description:
- * @Author: Iseason2000
- * @Date: 2022/4/26 下午10:20
- *
- */
-
 package top.iseason.bukkit.mmoforge.ui
 
 import io.lumine.mythic.lib.api.item.NBTItem
@@ -13,7 +6,6 @@ import net.Indyuce.mmoitems.MMOItems
 import net.Indyuce.mmoitems.api.Type
 import net.Indyuce.mmoitems.api.item.mmoitem.LiveMMOItem
 import net.Indyuce.mmoitems.stat.data.DoubleData
-import net.Indyuce.mmoitems.stat.type.NameData
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import top.iseason.bukkit.mmoforge.config.BreakUIConfig
@@ -22,6 +14,7 @@ import top.iseason.bukkit.mmoforge.config.MainConfig
 import top.iseason.bukkit.mmoforge.hook.PAPIHook
 import top.iseason.bukkit.mmoforge.hook.VaultHook.takeMoney
 import top.iseason.bukkit.mmoforge.stats.BreakChance
+import top.iseason.bukkit.mmoforge.stats.ForgeMaterialRequirement
 import top.iseason.bukkit.mmoforge.stats.MMOForgeData
 import top.iseason.bukkit.mmoforge.stats.MMOForgeRuleResolver
 import top.iseason.bukkit.mmoforge.stats.MMOForgeRuleSet
@@ -31,18 +24,15 @@ import top.iseason.bukkit.mmoforge.uitls.getForgeData
 import top.iseason.bukkittemplate.ui.container.ChestUI
 import top.iseason.bukkittemplate.ui.slot.*
 import top.iseason.bukkittemplate.utils.bukkit.ItemUtils.applyMeta
-import top.iseason.bukkittemplate.utils.bukkit.ItemUtils.checkAir
-import top.iseason.bukkittemplate.utils.bukkit.ItemUtils.decrease
 import top.iseason.bukkittemplate.utils.bukkit.ItemUtils.getDisplayName
 import top.iseason.bukkittemplate.utils.bukkit.MessageUtils.formatBy
 import top.iseason.bukkittemplate.utils.bukkit.MessageUtils.sendColorMessage
 import top.iseason.bukkittemplate.utils.other.EasyCoolDown
 import top.iseason.bukkittemplate.utils.other.RandomUtils
 import top.iseason.bukkittemplate.utils.other.submit
+import kotlin.math.max
+import kotlin.math.min
 
-/**
- * 突破界面
- */
 class BreakThroughUI(val player: Player) : ChestUI(
     PAPIHook.setPlaceHolderAndColor(BreakUIConfig.title, player),
     BreakUIConfig.row,
@@ -51,12 +41,12 @@ class BreakThroughUI(val player: Player) : ChestUI(
     private var inputData: MMOForgeData? = null
     private var inputRuleSet: MMOForgeRuleSet? = null
 
-    //    var limitSlot = mutableListOf<IOSlot>()
     private var canBreak = false
     private lateinit var inputSlot: IOSlot
     private lateinit var outputSlot: IOSlot
     private val breakThroughButtons = mutableListOf<Button>()
     private val materialSlots = mutableListOf<MaterialSlot>()
+    private val requirementSlots = mutableListOf<Icon>()
 
     private var gold = 0.0
     private var breakLevel = 0
@@ -74,6 +64,11 @@ class BreakThroughUI(val player: Player) : ChestUI(
         BreakUIConfig.slots["default-materials"]?.forEach { (item, slots) ->
             for (slot in slots) {
                 materialSlots.add(MaterialSlot(slot, PAPIHook.setPlaceHolderAndColor(item.clone(), player)).setup())
+            }
+        }
+        BreakUIConfig.slots["required-materials"]?.forEach { (item, slots) ->
+            for (slot in slots) {
+                requirementSlots.add(Icon(PAPIHook.setPlaceHolderAndColor(item.clone(), player), slot).setup())
             }
         }
         BreakUIConfig.slots["input"]?.forEach { (item, slots) ->
@@ -112,16 +107,7 @@ class BreakThroughUI(val player: Player) : ChestUI(
                             }
                             return@onClicked
                         }
-                        //扣材料
-                        for (materialSlot in materialSlots) {
-                            val itemStack = materialSlot.itemStack ?: continue
-                            itemStack.decrease()
-                            if (!itemStack.checkAir()) {
-                                materialSlot.ejectSilently(player)
-                            }
-                            materialSlot.reset()
-                        }
-                        //扣物品
+                        consumeRequiredMaterials(player, getCurrentRequirements())
                         reset()
                         if (chance < 100.0 && RandomUtils.checkPercentage(chance)) {
                             if (MainConfig.breakFailureRemoveItem) {
@@ -167,30 +153,18 @@ class BreakThroughUI(val player: Player) : ChestUI(
     inner class MaterialSlot(slotIndex: Int, placeholder: ItemStack?) :
         IOSlot(slotIndex, placeholder) {
 
-        private val basePlaceholder = placeholder
-        var requireItem: String? = null
-
+        private val basePlaceholder = placeholder?.clone()
         var chance = 0.0
 
         init {
-            //输入管理
             inputFilter {
-                if (inputData == null || requireItem == null) false
-                else {
-                    val split = requireItem!!.split(':')
-                    val nbtItem = NBTItem.get(it) ?: return@inputFilter false
-                    if (!nbtItem.hasType()) return@inputFilter false //目前仅支持mmo物品
-                    val type = nbtItem.type
-                    val id = nbtItem.getString("MMOITEMS_ITEM_ID")
-                    val result = type.equals(split[0], true) && id.equals(split[1], true)
-                    result
-                }
+                if (!isMaterialInputActive()) return@inputFilter false
+                val nbtItem = NBTItem.get(it) ?: return@inputFilter false
+                if (!nbtItem.hasType()) return@inputFilter false
+                matchesAnyRequirement(nbtItem)
             }
             onInput(async = true) {
-                val nbtItem = NBTItem.get(it)
-                if (nbtItem.hasTag(BreakChance.stat.nbtPath)) {
-                    chance = nbtItem.getDouble(BreakChance.stat.nbtPath)
-                }
+                chance = getBreakChance(it)
                 updateResult()
             }
             onOutput(async = true) {
@@ -200,73 +174,202 @@ class BreakThroughUI(val player: Player) : ChestUI(
         }
 
         override fun reset() {
-//            super.reset()
-            requireItem = null
             chance = 0.0
-            updateDisplay()
+            placeholder = getConfiguredItem(if (isMaterialInputActive()) "allow-materials" else "default-materials", index)
+                ?: basePlaceholder
+            itemStack = null
         }
 
-        /**
-         * 更新占位符名称
-         */
-        fun updateDisplay() {
-            if (requireItem == null) {
-                placeholder = basePlaceholder
+        fun refreshPlaceholder() {
+            val current = itemStack
+            placeholder = getConfiguredItem(if (isMaterialInputActive()) "allow-materials" else "default-materials", index)
+                ?: basePlaceholder
+            if (current == null) {
                 itemStack = null
-                return
             }
-            val split = requireItem!!.split(":")
-            if (split.size != 2) return
-            val type = Type.get(split[0]) ?: return
-            val template = MMOItems.plugin.templates.getTemplate(type, split[1]) ?: return
-            val item = BreakUIConfig.slots["allow-materials"]?.entries?.firstNotNullOfOrNull {
-                it.value.contains(this@MaterialSlot.index)
-                it.key
-            }
-            if (item != null) {
-                val typeName = type.name
-                val itemName = (template.baseItemData[ItemStats.NAME] as NameData).bake()
-                placeholder = item.clone().applyMeta {
-                    if (hasDisplayName())
-                        setDisplayName(
-                            PAPIHook.setPlaceHolderAndColor(displayName.formatBy(typeName, itemName), player),
-                        )
-                    if (hasLore()) lore =
-                        lore!!.map { PAPIHook.setPlaceHolderAndColor(it.formatBy(typeName, itemName), player) }
-                }
-            }
-            itemStack = null
         }
     }
 
-    private fun resetResult() {
-        breakThroughButtons.forEach { it.reset() }
-        for (materialSlot in materialSlots) {
-            materialSlot.ejectSilently(player)
-            materialSlot.reset()
+    private fun materialKey(requirement: ForgeMaterialRequirement): String =
+        "${requirement.type.lowercase()}:${requirement.id.lowercase()}"
+
+    private fun materialKey(item: ItemStack?): String? {
+        val nbtItem = NBTItem.get(item) ?: return null
+        if (!nbtItem.hasType()) return null
+        val id = nbtItem.getString("MMOITEMS_ITEM_ID") ?: return null
+        return "${nbtItem.type.lowercase()}:${id.lowercase()}"
+    }
+
+    private fun getCurrentRequirements(): List<ForgeMaterialRequirement> {
+        val inputData = inputData ?: return emptyList()
+        val ruleSet = inputRuleSet ?: return emptyList()
+        if (inputData.limit >= ruleSet.maxLimit) return emptyList()
+        return ruleSet.limitType[inputData.limit + 1].orEmpty()
+    }
+
+    private fun isMaterialInputActive(): Boolean = getCurrentRequirements().isNotEmpty()
+
+    private fun getConfiguredItem(type: String, index: Int): ItemStack? {
+        return BreakUIConfig.slots[type]?.entries?.firstNotNullOfOrNull { (item, slots) ->
+            item.clone().takeIf { slots.contains(index) }
+        }?.let { PAPIHook.setPlaceHolderAndColor(it, player) }
+            ?.let { if (type == "allow-materials") sanitizeAllowMaterialPlaceholder(it) else it }
+    }
+
+    private fun sanitizeAllowMaterialPlaceholder(item: ItemStack): ItemStack = item.applyMeta {
+        if (hasDisplayName()) {
+            setDisplayName(
+                displayName
+                    .replace("{0}", "")
+                    .replace("{1}", "")
+                    .replace("{2}", "")
+                    .replace("  ", " ")
+                    .trim()
+            )
         }
+        if (hasLore()) {
+            lore = lore!!.map {
+                it.replace("{0}", "")
+                    .replace("{1}", "")
+                    .replace("{2}", "")
+                    .replace("  ", " ")
+                    .trim()
+            }
+        }
+    }
+
+    private fun matchesAnyRequirement(nbtItem: NBTItem): Boolean {
+        val id = nbtItem.getString("MMOITEMS_ITEM_ID") ?: return false
+        return getCurrentRequirements().any { it.matches(nbtItem.type, id) }
+    }
+
+    private fun getRequirementTotals(requirements: List<ForgeMaterialRequirement> = getCurrentRequirements()): LinkedHashMap<String, Int> {
+        val totals = LinkedHashMap<String, Int>()
+        requirements.forEach { requirement ->
+            val key = materialKey(requirement)
+            totals[key] = (totals[key] ?: 0) + requirement.amount
+        }
+        return totals
+    }
+
+    private fun getPlacedMaterialTotals(): LinkedHashMap<String, Int> {
+        val totals = LinkedHashMap<String, Int>()
+        materialSlots.forEach { slot ->
+            val item = slot.itemStack ?: return@forEach
+            val key = materialKey(item) ?: return@forEach
+            totals[key] = (totals[key] ?: 0) + item.amount
+        }
+        return totals
+    }
+
+    private fun hasEnoughMaterials(requirements: List<ForgeMaterialRequirement>): Boolean {
+        if (requirements.isEmpty()) return false
+        val requiredTotals = getRequirementTotals(requirements)
+        val placedTotals = getPlacedMaterialTotals()
+        return requiredTotals.all { (key, amount) -> (placedTotals[key] ?: 0) >= amount }
+    }
+
+    private fun getBreakChance(itemStack: ItemStack?): Double {
+        val nbtItem = NBTItem.get(itemStack) ?: return 0.0
+        return if (nbtItem.hasTag(BreakChance.stat.nbtPath)) {
+            nbtItem.getDouble(BreakChance.stat.nbtPath)
+        } else {
+            0.0
+        }
+    }
+
+    private fun calculateMaterialChance(requirements: List<ForgeMaterialRequirement>): Double {
+        val requiredKeys = getRequirementTotals(requirements).keys
+        val chanceByKey = mutableMapOf<String, Double>()
+        materialSlots.forEach { slot ->
+            val item = slot.itemStack ?: return@forEach
+            val key = materialKey(item) ?: return@forEach
+            if (key !in requiredKeys) return@forEach
+            chanceByKey[key] = max(chanceByKey[key] ?: 0.0, slot.chance)
+        }
+        return chanceByKey.values.sum()
+    }
+
+    private fun buildRequirementDisplayItem(requirement: ForgeMaterialRequirement): ItemStack? {
+        val type = Type.get(requirement.type) ?: return null
+        val template = MMOItems.plugin.templates.getTemplate(type, requirement.id) ?: return null
+        val built = template.newBuilder().build().newBuilder().build() ?: return null
+        val displayAmount = min(requirement.amount, max(1, built.maxStackSize))
+        return built.apply {
+            amount = displayAmount
+        }
+    }
+
+    private fun updateRequirementDisplay() {
+        val requirements = getCurrentRequirements()
+        requirementSlots.forEachIndexed { index, icon ->
+            val requirement = requirements.getOrNull(index)
+            if (requirement == null) {
+                icon.reset()
+            } else {
+                icon.itemStack = buildRequirementDisplayItem(requirement) ?: icon.rawItemStack
+            }
+        }
+    }
+
+    private fun clearMaterialSlots(player: Player) {
+        materialSlots.forEach { slot ->
+            if (slot.itemStack != null) {
+                slot.ejectSilently(player)
+            }
+            slot.reset()
+        }
+    }
+
+    private fun consumeRequiredMaterials(player: Player, requirements: List<ForgeMaterialRequirement>) {
+        val requiredTotals = getRequirementTotals(requirements)
+        requiredTotals.forEach { (key, amount) ->
+            var remain = amount
+            for (slot in materialSlots) {
+                if (remain <= 0) break
+                val item = slot.itemStack ?: continue
+                if (materialKey(item) != key) continue
+                val currentAmount = item.amount
+                val consume = min(currentAmount, remain)
+                if (consume <= 0) continue
+                if (consume >= currentAmount) {
+                    slot.itemStack = null
+                } else {
+                    item.amount = currentAmount - consume
+                    slot.itemStack = item
+                }
+                remain -= consume
+            }
+        }
+        clearMaterialSlots(player)
+    }
+
+    private fun resetResult() {
+        canBreak = false
+        gold = 0.0
+        chance = 0.0
+        breakLevel = 0
+        newBreakLevel = 0
+        breakThroughButtons.forEach { it.reset() }
+        clearMaterialSlots(player)
+        requirementSlots.forEach { it.reset() }
         outputSlot.ejectSilently(player)
         outputSlot.reset()
         outputSlot.outputAble(false)
     }
 
-    /**
-     * 根据输入数据更新材料栏
-     */
     private fun updateInput(inputData: MMOForgeData?) {
         if (inputData == null) {
             resetResult()
             return
         }
-        val limitType = inputRuleSet?.limitType?.get(inputData.limit + 1)
-        //刷新材料槽
-        for ((i, s) in materialSlots.withIndex()) {
-            s.requireItem = limitType?.getOrNull(i)
-            s.updateDisplay()
-        }
+        materialSlots.forEach { it.refreshPlaceholder() }
+        updateRequirementDisplay()
+        updateResult()
     }
 
     private fun updateResult() {
+        updateRequirementDisplay()
         if (inputData == null) {
             resetResult()
             return
@@ -276,21 +379,25 @@ class BreakThroughUI(val player: Player) : ChestUI(
             resetResult()
             return
         }
-        //检测能否突破,可以则继续
-        if (materialSlots.all { it.requireItem == null }) {
+        val requirements = getCurrentRequirements()
+        if (requirements.isEmpty()) {
             resetResult()
             return
         }
-        //检查材料是否完整
-        if (materialSlots.any { it.requireItem != null && it.itemStack == null }) {
+        if (!hasEnoughMaterials(requirements)) {
+            canBreak = false
+            gold = 0.0
+            chance = 0.0
+            breakLevel = 0
+            newBreakLevel = 0
             breakThroughButtons.forEach { it.reset() }
             outputSlot.reset()
+            outputSlot.outputAble(false)
             return
         }
         val itemStack = inputSlot.itemStack ?: return
         val inputData = inputData!!.clone()
         val expression = MainConfig.goldBreakExpression.getString(inputData.star.toString()) ?: return
-        //设置所需金币
         gold = MainConfig.getValueByFormula(
             expression,
             inputData.star,
@@ -299,7 +406,6 @@ class BreakThroughUI(val player: Player) : ChestUI(
             nowLimit = inputData.limit,
             nowRefine = inputData.refine,
         )
-        // 预览物品
         val liveMMOItem = LiveMMOItem(itemStack)
         liveMMOItem.breakthrough(inputData, ruleSet, 1)
         breakLevel = inputData.limit
@@ -310,10 +416,8 @@ class BreakThroughUI(val player: Player) : ChestUI(
             (liveMMOItem.getData(BreakChance.stat) as DoubleData).value
         } else {
             100.0
-        } + materialSlots.sumOf { it.chance }
-        //把旧的弹出
+        } + calculateMaterialChance(requirements)
         outputSlot.ejectSilently(player)
-        //上锁
         outputSlot.outputAble(false)
         val oldName = itemStack.getDisplayName()
         outputSlot.itemStack = liveMMOItem.newBuilder().build()?.applyMeta {
@@ -326,14 +430,18 @@ class BreakThroughUI(val player: Player) : ChestUI(
         }
         BreakUIConfig.slots["allow-break"]?.forEach { (item, indexes) ->
             val stack = PAPIHook.setPlaceHolderAndColor(item.clone(), player).applyMeta {
-                if (hasDisplayName()) setDisplayName(
-                    displayName.replace("{gold}", gold.toString())
-                        .replace("{chance}", chance.toString())
-                )
-                if (hasLore()) lore = lore!!.map {
-                    it
-                        .replace("{gold}", gold.toString())
-                        .replace("{chance}", chance.toString())
+                if (hasDisplayName()) {
+                    setDisplayName(
+                        displayName.replace("{gold}", gold.toString())
+                            .replace("{chance}", chance.toString())
+                    )
+                }
+                if (hasLore()) {
+                    lore = lore!!.map {
+                        it
+                            .replace("{gold}", gold.toString())
+                            .replace("{chance}", chance.toString())
+                    }
                 }
             }
             for (index in indexes) {

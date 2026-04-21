@@ -10,7 +10,7 @@ data class MMOForgeRuleSet(
     val limitGain: ForgeParserMap,
     val forgeGain: ForgeParserMap,
     val forgeType: List<String>,
-    val limitType: LinkedHashMap<Int, List<String>>,
+    val limitType: ForgeMaterialMap,
 ) {
     fun getCurrentMaxForge(limit: Int): Int = min((limit + 1) * top.iseason.bukkit.mmoforge.config.MainConfig.LimitRate, maxForge)
 }
